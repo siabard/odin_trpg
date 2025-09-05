@@ -6,7 +6,7 @@ import ttf "vendor:sdl2/ttf"
 import "core:log"
 import "core:os"
 import "core:math/rand"
-
+import "core:fmt"
 
 WINDOW_TITLE :: "TRPG"
 WINDOW_WIDTH :: 1024
@@ -16,7 +16,7 @@ FONT_SIZE :: 12
 
 TEXT_VEL :: 3
 
-
+TICK_SPAN :: 1000 / 60
 
 Position :: struct {
     x: f32,
@@ -112,7 +112,28 @@ game_init :: proc (g: ^Game) -> bool  {
 
 }
 
-game_update :: proc(g: ^Game) {
+
+movement_system :: proc(g: ^Game, dt: u32) {
+    delta := f32(dt) / f32(1000)
+    for &entity in g.entities {
+	if entity.movement != nil && entity.position != nil {
+	    position := entity.position.(Position)
+	    movement := entity.movement.(Movement)
+
+	    position.x = position.x + movement.x * delta
+	    position.y = position.y + movement.y * delta
+
+	    entity.position = position
+	}
+    }
+}
+
+
+game_update :: proc(g: ^Game, dt: u32) {
+
+    // system 적용 
+    movement_system(g, dt)
+
     // entity 에서 added_entity 를 넣기 
     append(&g.entities, ..g.added_entities[:])
 
@@ -159,7 +180,10 @@ game_setup :: proc (g: ^Game) {
 	x = 40,
 	y = 120
     }
-
+    bEntity.movement = Movement {
+	x = 100,
+	y = 100,
+    }
 
     add_entity(g, bEntity)
 }
@@ -202,7 +226,8 @@ game_render :: proc (g: ^Game) {
 
 game_loop :: proc (g: ^Game) {
 
-
+    tick_start := sdl.GetTicks()
+    tick_end := tick_start
     main_loop: for {
 	// 이벤트 처리 
 	for sdl.PollEvent(&g.event) {
@@ -216,8 +241,17 @@ game_loop :: proc (g: ^Game) {
 	    }
 	} 
 	// 게임 상태 업데이트 
+	
 
-	game_update(g)
+	tick_loop: for {
+	    previous_tick_end := tick_end
+	    tick_end = sdl.GetTicks()
+	    dt := tick_end - previous_tick_end
+	    
+	    if tick_end - tick_start >= TICK_SPAN do break tick_loop
+	    game_update(g, dt)
+	}
+
 
 	// 화면 지우기
 	render_background(g)
@@ -245,8 +279,9 @@ game_loop :: proc (g: ^Game) {
 	game_render(g)
 
 	sdl.RenderPresent(g.renderer)
+	// fmt.printf("%d - %d = %d\n", tick_end, tick_start, tick_end - tick_start)
 
-	sdl.Delay(60)
+	tick_start = sdl.GetTicks()
 
     }
 }
